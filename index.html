@@ -610,7 +610,7 @@ select option{background:#1A1A2A;color:var(--t)}
       <span id="sync-adm" style="display:inline-flex;align-items:center;width:18px;height:18px"></span>
       <span class="bge b-b">Sub-Admin</span>
       <button id="btn-switch-res" class="btn bg2 sm" onclick="switchToResident()" style="display:none;background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.35);padding:.3rem .65rem;font-size:.74rem">Res.</button>
-      <button class="btn bg2 sm" onclick="logout()">Salir</button>
+      <button class="btn bg2 sm" onclick="confirmLogoutAdm()">Salir</button>
     </div>
   </div>
   <div class="nav">
@@ -804,7 +804,7 @@ select option{background:#1A1A2A;color:var(--t)}
 <div id="scr-mst" class="screen">
   <div class="topbar">
     <div class="t-brand"><div><div class="t-brand-main">MojaveApp</div><div class="t-brand-sub">Panel Maestro</div></div></div>
-    <div class="t-right"><span class="bge y-b">Master</span><button class="btn bg2 sm" onclick="logout()">Salir</button></div>
+    <div class="t-right"><span class="bge y-b">Master</span><button class="btn bg2 sm" onclick="confirmLogoutAdm()">Salir</button></div>
   </div>
   <div class="nav">
     <button class="ntab on" onclick="mstP('cerradas',this)"><span class="ic" style="margin-right:.3rem"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z"/></svg></span>Cerradas</button>
@@ -948,6 +948,38 @@ select option{background:#1A1A2A;color:var(--t)}
       <div class="frow">
         <button class="btn bg2 wf" onclick="closeModal('modal-logout-res')">Cancelar</button>
         <button class="btn bd wf" onclick="doLogoutRes()">Confirmar y Salir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SALIR ADMIN / MASTER -->
+<div class="mover" id="modal-logout-adm" onclick="mbg(event,'modal-logout-adm')">
+  <div class="mdl">
+    <!-- Paso 1: Confirmar -->
+    <div id="adm-logout-step1">
+      <div style="text-align:center;margin-bottom:.6rem;display:flex;justify-content:center"><svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/></svg></div>
+      <div class="mtitle" style="text-align:center;margin-bottom:.4rem">¿Deseas salir?</div>
+      <p style="text-align:center;color:var(--t2);font-size:.83rem;margin-bottom:1.3rem;line-height:1.55">
+        Para volver a entrar necesitarás tu usuario y contraseña.
+      </p>
+      <div class="frow">
+        <button class="btn bg2 wf" onclick="closeModal('modal-logout-adm')">Cancelar</button>
+        <button class="btn bd wf" onclick="showAdmLogoutStep2()">Sí, salir</button>
+      </div>
+    </div>
+    <!-- Paso 2: Verificar contraseña -->
+    <div id="adm-logout-step2" style="display:none">
+      <div class="mtitle"><span class="ic" style="margin-right:.4rem"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg></span>Confirma tu contraseña</div>
+      <p style="color:var(--t2);font-size:.82rem;margin-bottom:.9rem;line-height:1.5">
+        Ingresa tu contraseña o PIN para confirmar que eres tú.
+      </p>
+      <label>Contraseña / PIN</label>
+      <input id="adm-logout-pin-input" type="password" placeholder="••••" autocomplete="current-password">
+      <div class="err" id="adm-logout-pin-err"></div>
+      <div class="frow">
+        <button class="btn bg2 wf" onclick="closeModal('modal-logout-adm')">Cancelar</button>
+        <button class="btn bd wf" onclick="doLogoutAdm()">Confirmar y Salir</button>
       </div>
     </div>
   </div>
@@ -1501,6 +1533,32 @@ function doLogoutRes(){
     return;
   }
   closeModal('modal-logout-res');
+  logout();
+}
+
+// ── SALIR ADMIN / MASTER CON VERIFICACIÓN
+function confirmLogoutAdm(){
+  document.getElementById('adm-logout-step1').style.display='block';
+  document.getElementById('adm-logout-step2').style.display='none';
+  const inp=document.getElementById('adm-logout-pin-input');if(inp)inp.value='';
+  const err=document.getElementById('adm-logout-pin-err');if(err)err.style.display='none';
+  openModal('modal-logout-adm');
+}
+function showAdmLogoutStep2(){
+  document.getElementById('adm-logout-step1').style.display='none';
+  document.getElementById('adm-logout-step2').style.display='block';
+  setTimeout(()=>document.getElementById('adm-logout-pin-input')?.focus(),120);
+}
+function doLogoutAdm(){
+  const entered=(document.getElementById('adm-logout-pin-input')?.value||'').trim();
+  if(!entered){showErr('adm-logout-pin-err','Ingresa tu contraseña');return;}
+  if(U?.role==='master'){
+    if(entered!==String(S.masterKey)){showErr('adm-logout-pin-err','Contraseña incorrecta');return;}
+  }else{
+    const c=C();
+    if(c&&entered!==String(c.adminPin)){showErr('adm-logout-pin-err','PIN incorrecto');return;}
+  }
+  closeModal('modal-logout-adm');
   logout();
 }
 
