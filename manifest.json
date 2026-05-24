@@ -1,0 +1,26 @@
+{
+  "name": "MojaveApp",
+  "short_name": "MojaveApp",
+  "description": "Control de acceso — Residencial Mojave",
+  "start_url": "https://racosta123.github.io/mojaveapp/",
+  "scope": "https://racosta123.github.io/mojaveapp/",
+  "display": "standalone",
+  "background_color": "#0D0D1A",
+  "theme_color": "#F5A623",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "https://racosta123.github.io/mojaveapp/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://racosta123.github.io/mojaveapp/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
