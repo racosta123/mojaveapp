@@ -832,16 +832,7 @@ select option{background:#1A1A2A;color:var(--t)}
       </div>
     </div>
     <div id="mp-config" class="panel">
-      <div class="card">
-        <div class="ch"><div class="ct"><span class="ic" style="margin-right:.35rem"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33 4.502 4.502 0 00-1.091 8.775z"/></svg></span>Sincronización Firestore</div><span class="bge gr-b">Activo</span></div>
-        <p style="font-size:.78rem;color:var(--t2);margin-bottom:.85rem">Los datos de cada cerrada se sincronizan automáticamente con Firestore. Si iniciaste sesión en un dispositivo nuevo, ingresa el código de la cerrada para importarla.</p>
-        <label>Código de cerrada</label>
-        <div style="display:flex;gap:.5rem">
-          <input id="mc-fs-code" placeholder="Ej: MOJAVE-001" style="margin:0;flex:1" oninput="this.value=this.value.toUpperCase()">
-          <button class="btn bp" style="white-space:nowrap;display:inline-flex;align-items:center;gap:.35rem" onclick="loadMstFirestore()"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>Importar</button>
-        </div>
-        <div id="mc-fs-msg" style="margin-top:.6rem;font-size:.78rem;color:var(--t2);display:none"></div>
-      </div>
+
       <div class="card"><div class="ch"><div class="ct"><span class="ic" style="margin-right:.35rem"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg></span>Acceso Master</div></div>
         <label>Usuario master</label>
         <input id="mc-user" type="text" placeholder="MASTER" autocomplete="off">
@@ -2803,21 +2794,6 @@ function saveMstPortones(code){
   toast('IPs guardadas para '+c.name);
 }
 
-// ── MASTER JSONBIN
-async function loadMstFirestore(){
-  const codeInput=document.getElementById('mc-fs-code');
-  const msg=document.getElementById('mc-fs-msg');
-  const code=(codeInput?.value||'').trim().toUpperCase();
-  if(!code){toast('Ingresa el código de la cerrada');return;}
-  msg.style.display='block';msg.style.color='var(--t2)';msg.textContent='Buscando en Firestore...';
-  const record=await fsGet(code);
-  if(!record){msg.style.color='var(--rose)';msg.textContent='Cerrada no encontrada en Firestore.';return;}
-  S.cerradas[code]=record;save();
-  msg.style.color='var(--green)';msg.textContent=`"${record.name}" importada correctamente.`;
-  if(codeInput) codeInput.value='';
-  renderMstList();renderNegocio();
-  toast(`"${record.name}" importada`);
-}
 
 // ── SISTEMA DE INVITACIÓN
 async function sendInvite(i) {
