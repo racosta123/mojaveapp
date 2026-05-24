@@ -101,13 +101,12 @@ body{font-family:var(--fb);background:var(--bg);color:var(--t);min-height:100vh;
   border:1px solid rgba(245,166,35,.2)}
 .brand{text-align:center;margin-bottom:1.4rem}
 .brand-ico{
-  width:70px;height:70px;
-  background:linear-gradient(135deg,#F5A623,#E8850A,#C4650A);
-  background-size:200% 200%;
-  animation:float 3.2s ease-in-out infinite,gradShift 5s ease infinite;
-  border-radius:22px;display:flex;align-items:center;justify-content:center;
-  margin:0 auto .85rem;font-size:1.95rem;
+  width:86px;height:86px;
+  border-radius:22px;overflow:hidden;
+  animation:float 3.2s ease-in-out infinite;
+  margin:0 auto .85rem;
   box-shadow:0 12px 36px rgba(232,133,10,.55),0 0 0 1px rgba(245,166,35,.25)}
+.brand-ico img{width:100%;height:100%;object-fit:cover;display:block}
 .brand h1{
   font-family:var(--fd);font-size:1.85rem;font-weight:900;
   background:linear-gradient(135deg,#FFD280,#F5A623,#E8850A);
@@ -427,7 +426,7 @@ select option{background:#1A1A2A;color:var(--t)}
 <div id="scr-login" class="screen active">
   <div class="lcard">
     <div class="brand">
-      <div class="brand-ico"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#F5A623" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z"/></svg></div>
+      <div class="brand-ico"><img src="icon-192.png" alt="Mojave Privada"></div>
       <h1>MojaveApp</h1>
       <p>Control de Acceso Comunitario</p>
     </div>
