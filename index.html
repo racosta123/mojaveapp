@@ -2263,7 +2263,7 @@ function renderVec(){
         </div>
       </div>
       <div class="ia">
-        ${r.pendingReg!==false?`<button class="btn bb2 xs" onclick="if(navigator.vibrate)navigator.vibrate(30);sendInvite(${i})" title="Invitar" style="display:inline-flex;align-items:center;justify-content:center"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 8.25h3"/></svg></button>`:''}
+        ${r.pendingReg!==false&&!r.invitacion_usada?r.invitaciones_enviadas>=3?`<span style="font-size:.62rem;color:var(--rose);font-weight:700;text-align:center;line-height:1.2">Límite<br>alcanzado</span>`:`<div style="display:inline-flex;flex-direction:column;align-items:center;gap:.1rem"><span style="font-size:.6rem;color:var(--t3);white-space:nowrap">Enviadas: ${r.invitaciones_enviadas||0}/3</span><button class="btn bb2 xs" onclick="if(navigator.vibrate)navigator.vibrate(30);sendInvite(${i})" title="Reenviar invitación" style="display:inline-flex;align-items:center;justify-content:center"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 8.25h3"/></svg></button></div>`:''}
         <button class="btn bg2 xs" onclick="if(navigator.vibrate)navigator.vibrate(20);editVec(${i})" title="Editar" style="display:inline-flex;align-items:center;justify-content:center"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg></button>
         <button class="btn bw xs" onclick="if(navigator.vibrate)navigator.vibrate(20);openPinModal(${i},-1)" title="Contraseña" style="display:inline-flex;align-items:center;justify-content:center"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg></button>
         <button class="btn xs" style="background:${r.active&&!r.mora?'#16a34a':'#dc2626'};color:#fff;display:inline-flex;align-items:center;justify-content:center" onclick="if(navigator.vibrate)navigator.vibrate(30);toggleVec(${i})">${r.active&&!r.mora?'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>':'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>'}</button>
@@ -2856,12 +2856,27 @@ async function sendInvite(i) {
   const c = C(); if (!c) return;
   const res = c.residents[i];
 
-  // Generar token único
+  // Verificar límite de reenvíos
+  const enviadas = res.invitaciones_enviadas || 0;
+  if (enviadas >= 3) { toast('Límite de 3 invitaciones alcanzado para este vecino.'); return; }
+  if (res.invitacion_usada) { toast('Este vecino ya completó su registro.'); return; }
+
+  // Generar nuevo token
   const token = btoa(`${c.code}|${res.house}|${Date.now()}`).replace(/=/g,'');
   c.residents[i].inviteToken = token;
+  c.residents[i].invitacion_token = token;
   c.residents[i].inviteExpires = Date.now() + (7 * 24 * 60 * 60 * 1000);
+  c.residents[i].invitaciones_enviadas = enviadas + 1;
+  c.residents[i].invitacion_usada = false;
   save();
-  fsPush(c).catch(()=>{}); // push en background, no bloquear
+
+  // Esperar confirmación de Firestore antes de generar el link
+  toast('Sincronizando con la nube...');
+  const pushed = await fsPush(c);
+  if (!pushed) {
+    toast('Error al sincronizar. Verifica tu conexión e intenta de nuevo.');
+    return;
+  }
 
   toast('Generando invitación...');
   const baseUrl = 'https://racosta123.github.io/mojaveapp/register.html';
@@ -3033,28 +3048,36 @@ async function submitRegister() {
   // No validar token estrictamente — el link es suficientemente seguro
   // Solo verificar que la casa existe y tiene espacio
 
-  // Agregar miembro
+  // Agregar o actualizar miembro (si ya hay jefe registrado, sobreescribir)
   if (!c.residents[resIdx].members) c.residents[resIdx].members = [];
-  const memberIdx = c.residents[resIdx].members.length;
-  c.residents[resIdx].members.push({
-    name, address, email, password: pass, role,
-    registeredAt: new Date().toISOString(),
-    suspended: false
-  });
-
-  // Si es el jefe actualizar datos principales
+  let memberIdx;
+  const memberData = { name, address, email, password: pass, role, registeredAt: new Date().toISOString(), suspended: false };
   if (role === 'head') {
+    const existingHeadIdx = c.residents[resIdx].members.findIndex(m => m.role === 'head');
+    if (existingHeadIdx >= 0) {
+      c.residents[resIdx].members[existingHeadIdx] = memberData;
+      memberIdx = existingHeadIdx;
+    } else {
+      c.residents[resIdx].members.push(memberData);
+      memberIdx = c.residents[resIdx].members.length - 1;
+    }
     c.residents[resIdx].name     = name;
     c.residents[resIdx].email    = email;
     c.residents[resIdx].password = pass;
     c.residents[resIdx].pin      = pin;
+  } else {
+    c.residents[resIdx].members.push(memberData);
+    memberIdx = c.residents[resIdx].members.length - 1;
   }
+
+  // Marcar invitación como usada y registro completo
+  c.residents[resIdx].invitacion_usada = true;
+  c.residents[resIdx].pendingReg = false;
 
   save();
   if (c.code) fsPush(c);
 
-  // Mantener el token activo por si necesita registrar más familiares
-  // Solo limpiar sesión anterior y guardar nueva como residente
+  // Limpiar sesión anterior y guardar nueva como residente
   localStorage.removeItem('cerrada_session');
   U = { role:'resident', cerradaCode:code, house, memberIdx, memberName:name };
   localStorage.setItem('cerrada_session', JSON.stringify(U));
