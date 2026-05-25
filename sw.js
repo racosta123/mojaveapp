@@ -1,4 +1,4 @@
-// MojaveApp Service Worker — v1
+// MojaveApp Service Worker — v2
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 firebase.initializeApp({
@@ -14,8 +14,8 @@ messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
   self.registration.showNotification(title || 'MojaveApp', {
     body: body || '',
-    icon: '/mojaveapp/icon-192.png',
-    badge: '/mojaveapp/icon-192.png',
+    icon: '/mojaveapp/icons/icon-192x192.png',
+    badge: '/mojaveapp/icons/icon-192x192.png',
     vibrate: [200, 100, 200]
   });
 });
@@ -43,7 +43,7 @@ self.addEventListener('message', (e) => {
     });
   }
 });
-const CACHE = 'mojaveapp-v1';
+const CACHE = 'mojaveapp-v2';
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/mojaveapp/','/mojaveapp/index.html'])));
   self.skipWaiting();
