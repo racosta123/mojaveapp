@@ -1,0 +1,21 @@
+demo-nuevo*.html
+demo-candado*.html
+*.zip
+files*.zip
+.wrangler/
+backups/
+run-with-sa.js
+poner-secret-worker.js
+.claude/
+
+# Claves de service account / Admin SDK — secretos reales, NUNCA subir
+*serviceAccount*.json
+*serviceaccount*.json
+*adminsdk*.json
+*-firebase-adminsdk-*.json
+
+# Firebase CLI: logs locales de depuración (pueden traer detalles de la sesión)
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+.firebase/

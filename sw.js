@@ -1,66 +1,56 @@
-// MojaveApp Service Worker — v2
-importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
-firebase.initializeApp({
-  apiKey: "AIzaSyChuftPnUTXr7KmrVufvMxtmeH14Or0HUU",
-  authDomain: "cerradaapp-7179e.firebaseapp.com",
-  projectId: "cerradaapp-7179e",
-  storageBucket: "cerradaapp-7179e.firebasestorage.app",
-  messagingSenderId: "481439052062",
-  appId: "1:481439052062:web:c3a0a104bae74763cf590f"
-});
-const messaging = firebase.messaging();
-messaging.onBackgroundMessage((payload) => {
-  const { title, body } = payload.notification || {};
-  self.registration.showNotification(title || 'MojaveApp', {
-    body: body || '',
-    icon: '/mojaveapp/icons/icon-192x192.png',
-    badge: '/mojaveapp/icons/icon-192x192.png',
-    vibrate: [200, 100, 200]
-  });
-});
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  e.waitUntil(
-    clients.matchAll({type:'window',includeUncontrolled:true}).then(cs => {
-      const ex = cs.find(c => c.url.includes('mojaveapp'));
-      if (ex) return ex.focus();
-      return clients.openWindow('https://racosta123.github.io/mojaveapp/');
-    })
-  );
-});
-self.addEventListener('message', (e) => {
-  if (!e.data) return;
-  if (e.data.type === 'SKIP_WAITING') { self.skipWaiting(); return; }
-  if (e.data.type === 'SUSPEND_USER') {
-    self.clients.matchAll({type:'window',includeUncontrolled:true}).then(cs => {
-      cs.forEach(c => c.postMessage({ type: 'USER_SUSPENDED', house: e.data.house, cerradaCode: e.data.cerradaCode }));
-    });
-  }
-  if (e.data.type === 'REACTIVATE_USER') {
-    self.clients.matchAll({type:'window',includeUncontrolled:true}).then(cs => {
-      cs.forEach(c => c.postMessage({ type: 'USER_REACTIVATED', house: e.data.house, cerradaCode: e.data.cerradaCode }));
-    });
-  }
-});
-const CACHE = 'mojaveapp-v2';
+const CACHE = 'mojave-v1';
+const ASSETS = ['./','./index.html','./app.js','./config.js','./manifest.json',
+  './vendor/qrcode.min.js','./vendor/jspdf.umd.min.js','./vendor/jspdf.plugin.autotable.min.js','./vendor/chart.umd.min.js',
+  './assets/fondo-mojave-mobile.jpg','./assets/fondo-mojave-desktop.jpg','./assets/logo-mojave.jpg',
+  './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'];
+
+// cache:'reload' — GitHub Pages manda Cache-Control max-age=600: con addAll(ASSETS) a secas el
+// precache de una versión NUEVA podía llenarse con el app.js/index.html VIEJO que el navegador
+// aún tenía en su caché HTTP (hasta 10 min). 'reload' obliga a traer cada archivo del servidor.
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/mojaveapp/','/mojaveapp/index.html'])));
-  self.skipWaiting();
+  e.waitUntil(caches.open(CACHE)
+    .then(c => c.addAll(ASSETS.map(u => new Request(u, { cache:'reload' }))))
+    .then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
-  self.clients.claim();
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
 });
+
+// La "app shell" (index.html/app.js) va primero-la-red: así una versión nueva se ve de inmediato
+// en vez de quedarse pegada a lo que ya estaba en caché. Todo lo demás (vendor, imágenes,
+// iconos, manifest) sigue cache-primero como antes: cambia poco y no vale la pena regresar a
+// la red por eso en cada carga.
+function esAppShell(req, url){
+  return req.mode === 'navigate' || url.pathname.endsWith('/app.js') || url.pathname.endsWith('/index.html');
+}
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (url.pathname.includes('register.html')) { e.respondWith(fetch(e.request)); return; }
-  if (url.searchParams.has('reg')) { e.respondWith(fetch(e.request)); return; }
-  if (e.request.method !== 'GET') { e.respondWith(fetch(e.request)); return; }
-  if (url.hostname !== 'racosta123.github.io') { e.respondWith(fetch(e.request)); return; }
-  e.respondWith(fetch(e.request).then(res=>{
-    const clone=res.clone();
-    caches.open(CACHE).then(c=>c.put(e.request,clone));
-    return res;
-  }).catch(()=>caches.match(e.request)));
+  // Nunca cachear llamadas al Worker ni a Firebase
+  if (url.pathname.startsWith('/abrir') || url.hostname.includes('workers.dev') || url.hostname.includes('googleapis')) return;
+
+  if (esAppShell(e.request, url)){
+    e.respondWith(
+      // cache:'no-cache' — "primero la red" de verdad: revalida con el servidor en vez de
+      // aceptar lo que el navegador tenga en su caché HTTP (max-age=600 de GitHub Pages), que
+      // podía devolver el app.js viejo hasta 10 min después de publicar.
+      fetch(e.request, { cache:'no-cache' })
+        .then(res => {
+          if (res.ok){
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
+
+// app.js pregunta por postMessage qué versión tiene ESTE service worker activo (para mostrarla
+// en Gestión) — así siempre se muestra lo que de verdad está corriendo, no un número fijo.
+self.addEventListener('message', e => {
+  if (e.data?.type === 'GET_VERSION') e.source?.postMessage({ type:'VERSION', version: CACHE });
 });

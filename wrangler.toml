@@ -1,0 +1,41 @@
+name = "mojave-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+# Preview URLs APAGADAS (seguridad): cada versión subida tenía su propia URL pública que seguía
+# ejecutando código VIEJO con los secrets y el Firestore de producción. workers.dev (la URL
+# principal) sigue activa. Sin esta línea, un wrangler deploy las volvería a encender.
+preview_urls = false
+
+[vars]
+# Origen permitido (CORS): GitHub Pages de Mojave
+ALLOWED_ORIGIN = "https://racosta123.github.io"
+# Proyecto Firebase de Mojave (dato público, no es un secret).
+FIREBASE_PROJECT = "mojaveapp-12b25"
+# "1" (default, seguro) = toda apertura pasa por el portero de fila (SHELLY_GATE). "0" = bypass:
+# llamada directa a Shelly Cloud, sin cola/espaciado/dedupe (mismo timeout, mismos secrets).
+# Cualquier valor raro o ausente = "1". Solo para comparar tiempos con/sin portero — ver
+# triggerShelly() en worker.js. Al terminar cualquier prueba, debe quedar en "1".
+SHELLY_GATE_ENABLED = "0"
+# Portero de fila de Shelly Cloud (límite ~1 req/s por cuenta). Ajustables sin tocar código:
+SHELLY_MIN_SPACING_MS = 1200      # separación mínima entre llamadas reales a Shelly
+SHELLY_RETRY_DELAY_MS = 1500      # pausa antes del único reintento por max_req / 429
+SHELLY_CALL_TIMEOUT_MS = 8000     # tope de UNA llamada a Shelly (se aborta y responde 502); 0 = sin tope
+SHELLY_MAX_QUEUE_WAIT_MS = 20000  # tope de espera en fila; pasado esto responde "reintenta" (503)
+SHELLY_DEDUPE_WINDOW_MS = 2000    # mismo "abrir" a la misma puerta en esta ventana = una sola llamada
+
+# Durable Object: UNA instancia global (nombre fijo "shelly-gate") que serializa Shelly Cloud.
+[[durable_objects.bindings]]
+name = "SHELLY_GATE"
+class_name = "ShellyGate"
+
+# new_sqlite_classes = backend SQLite (el recomendado hoy y el único disponible en plan Free).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ShellyGate"]
+
+[triggers]
+crons = ["0 16 * * *"]
+
+# Secrets (NO van aquí, se cargan con: wrangler secret put NOMBRE):
+#   SHELLY_HOST  SHELLY_AUTH_KEY  SHELLY_DEVICES  FIREBASE_PROJECT
+#   SA_EMAIL  SA_PRIVATE_KEY  READER_KEY  READER_SYNC_URL

@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    // FASE 7 — staff = master/admin, o un JEFE con esAdmin:true y ACTIVO (jefe-admin).
+    // Misma regla que esStaff() en el Worker, a los dos lados: un jefe suspendido por mora
+    // pierde los poderes de admin. get(campo, default) tolera los docs viejos que aún no
+    // tienen esAdmin/estado. El permiso lo escribe SOLO el Worker (usuarios es de solo
+    // lectura para el cliente: create/delete false y update limitado a fcmToken).
+    function staff() {
+      return perfil().rol in ['master','admin']
+          || (perfil().get('esAdmin', false) == true && perfil().get('estado', 'activo') == 'activo');
+    }
+    function signedIn() { return request.auth != null; }
+    // Casa de quien consulta = persona del JEFE: el jefe usa su personaId, el familiar su jefeId.
+    // '' para quien no es residente (esclavo, admin, master) → nunca coincide con ninguna casa.
+    // personaId/jefeId los escribe SOLO el Worker (el cliente solo puede tocar fcmToken).
+    function miCasaId() {
+      let p = perfil();
+      return p.get('rol', '') != 'residente' ? ''
+           : (p.get('jefeId', '') != '' ? p.get('jefeId', '') : p.get('personaId', ''));
+    }
+
+    // ---- usuarios ----
+    match /usuarios/{uid} {
+      // cada quien lee su perfil; staff lee todos
+      allow read: if signedIn() && (request.auth.uid == uid || staff());
+      // el alta la hace el Worker (Admin SDK). El cliente solo actualiza su fcmToken.
+      allow create: if false;
+      allow update: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken']);
+      allow delete: if false;
+    }
+
+    // ---- aperturas (bitácora) ----
+    match /aperturas/{id} {
+      // staff ve todo; residente/esclavo su hogar; y TODA la casa (jefe y familiares) ve las
+      // visitas de su casa (el Worker guarda casaId en cada visita). Una casa nunca ve otra.
+      allow read: if signedIn() && (
+        staff() ||
+        resource.data.hogar == request.auth.uid ||
+        resource.data.hogar == get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('residenteUid','') ||
+        (miCasaId() != '' && resource.data.casaId == miCasaId())
+      );
+      // los registros SOLO los escribe el Worker (service account, ignora estas reglas)
+      allow write: if false;
+    }
+
+    // ---- alertas_bitacora ("⚠️ Posible residente suspendido" en visitas y, desde v13, "⚠️ Posible
+    // residente de otra casa" en aperturas de un familiar marcado) ----
+    // Mismo id que el registro de aperturas al que marcan. SOLO staff: el residente que invitó
+    // no debe poder saber (ni con devtools) que el nombre de su visita coincide con un vecino
+    // suspendido. Las escribe únicamente el Worker.
+    match /alertas_bitacora/{id} {
+      allow read: if signedIn() && staff();
+      allow write: if false;
+    }
+
+    // ---- alertas_familiares ("⚠️ Posible residente de otra casa") ----
+    // Una por familiar marcado (id = personaId). SOLO staff: ni el familiar ni su jefe deben
+    // saber que está marcado. La escribe únicamente el Worker (al dar de alta al familiar, al
+    // reevaluar tras editar el padrón y al marcarla "Revisado, es correcto").
+    match /alertas_familiares/{personaId} {
+      allow read: if signedIn() && staff();
+      allow write: if false;
+    }
+
+    // ---- invitaciones ----
+    match /invitaciones/{jti} {
+      allow read: if signedIn() && (
+        staff() ||
+        resource.data.hogar == request.auth.uid ||
+        resource.data.hogar == get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('residenteUid','')
+      );
+      // creación/consumo de usos: SOLO el Worker
+      allow write: if false;
+    }
+    // ---- controlPin (candado de fuerza bruta del PIN de respaldo, por LECTOR) ----
+    // No cuelga de ninguna invitación (un PIN incorrecto no pertenece a ninguna) — colección
+    // aparte, únicamente Worker (service account, ignora estas reglas).
+    match /controlPin/{readerId} {
+      allow read, write: if false;
+    }
+    // ---- finanzas ----
+    match /finanzas/{id} {
+      // Solo staff lee el detalle de movimientos (incluye el campo "casa" por cuota).
+      // Residentes/esclavos ya NO leen esta colección directo — reciben solo agregados
+      // vía el Worker (endpoint /finanzas/resumen), para que no puedan reconstruir
+      // la lista de morosos con las devtools aunque la UI la oculte.
+      allow read: if signedIn() && staff();
+      // los movimientos SOLO los escribe el Worker tras verificar rol master/admin
+      allow write: if false;
+    }
+
+    // ---- finanzas_log (bitácora de cambios de finanzas) ----
+    // Cada alta/cancelación/corrección/reactivación la escribe el Worker EN EL MISMO commit que
+    // el cambio. Staff la lee (vista "Historial"); nadie la escribe ni la borra desde el cliente.
+    match /finanzas_log/{id} {
+      allow read: if signedIn() && staff();
+      allow write: if false;
+    }
+    // ---- finanzas_limites (límite de cancelaciones por hora) y finanzas_borrados (respaldos
+    // de la época en que se borraba) — solo Worker. Explícito aunque la regla por defecto ya
+    // lo niega, para que nadie abra estas colecciones por accidente. ----
+    match /finanzas_limites/{uid} {
+      allow read, write: if false;
+    }
+    match /finanzas_borrados/{id} {
+      allow read, write: if false;
+    }
+
+    // ---- config (ej. config/general → totalCasas) ----
+    match /config/{id} {
+      // Solo staff necesita leer la config directo; residentes la reciben ya
+      // incorporada en el agregado de /finanzas/resumen.
+      // config/dispositivos (IDs de los Shelly) NO se lee desde el cliente: solo el Worker (Admin SDK).
+      allow read: if signedIn() && staff() && id != 'dispositivos';
+      // SOLO el Worker escribe (tras verificar rol master/admin)
+      allow write: if false;
+    }
+
+    // ---- votaciones (FASE V1) ----
+    // La votación y su conteo en vivo los ve cualquier vecino autenticado (resultados
+    // públicos = requisito del negocio). El umbral para mostrar el conteo NO se aplica
+    // aquí: el Worker no escribe el campo "conteo" hasta participaronCount >= umbralConteo.
+    match /votaciones/{id} {
+      allow read:  if signedIn();
+      allow write: if false;
+
+      // Lista de participación: NADIE la lee directo. Los dos candados (bloque de 5 y
+      // 1 actualización/hora por admin) son temporales y con estado — no se pueden
+      // expresar en reglas. Se sirve SOLO por el Worker, que devuelve nombres en bloques
+      // completos de 5, en orden aleatorio, sin timestamp ni "orden". El master NO gestiona.
+      match /participacion/{casaId} {
+        allow read:  if false;
+        allow write: if false;
+      }
+
+      // Liga casa->opción (opcionActual, mínima para cambiar el voto; el Worker la borra
+      // al congelar), tally interno en vivo, y throttle 1/hora por admin. Todo Worker-only.
+      match /_privado/{doc} {
+        allow read:  if false;
+        allow write: if false;
+      }
+    }
+
+    // ---- control (una sola votación activa a la vez) ----
+    // Puntero singleton activaId. Lo leen master/admin/jefe-admin; el master solo lee.
+    match /control/{doc} {
+      allow read:  if signedIn() && staff();
+      allow write: if false;
+    }
+  }
+}

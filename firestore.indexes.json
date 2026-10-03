@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "aperturas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "casaId", "order": "ASCENDING" },
+        { "fieldPath": "ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aperturas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hogar", "order": "ASCENDING" },
+        { "fieldPath": "ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invitaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hogar", "order": "ASCENDING" },
+        { "fieldPath": "activa", "order": "ASCENDING" },
+        { "fieldPath": "expira", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
