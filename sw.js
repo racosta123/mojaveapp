@@ -1,7 +1,7 @@
-const CACHE = 'mojave-v1';
+const CACHE = 'mojave-v2';
 const ASSETS = ['./','./index.html','./app.js','./config.js','./manifest.json',
   './vendor/qrcode.min.js','./vendor/jspdf.umd.min.js','./vendor/jspdf.plugin.autotable.min.js','./vendor/chart.umd.min.js',
-  './assets/fondo-mojave-mobile.jpg','./assets/fondo-mojave-desktop.jpg','./assets/logo-mojave.jpg',
+  './assets/fondo-mojave-mobile.webp','./assets/fondo-mojave-desktop.webp','./assets/logo-mojave.jpg',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'];
 
 // cache:'reload' — GitHub Pages manda Cache-Control max-age=600: con addAll(ASSETS) a secas el

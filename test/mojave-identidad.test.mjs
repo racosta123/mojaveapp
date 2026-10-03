@@ -122,7 +122,7 @@ await t('con valores "sin cobro" nadie recibe recordatorio ni aviso, ni se suspe
 
 console.log('\n[M3] identidad: sin residuos de otros proyectos ni del Mojave anterior');
 const PROHIBIDAS = [/c[oó]rdoba/i, /marquesa/i, /cerradaapp/i, /MASTER2025/, /e4b063eb85a4/i, /jsonbin/i, /shelly-258/i, /7179e/, /481439052062/, /571836457514/, /67754183430/,
-  /AIzaSyBwRW891/, /AIzaSyDdaoq/, /AIzaSyChuftP/, /cerrada-cordoba/, /cerrada-la-marquesa/, /la-marquesa-proxy/, /cordoba-proxy/];
+  /AIzaSyBwRW891/, /AIzaSyDdaoq/, /AIzaSyChuftP/, /solana/i, /cerrada-cordoba/, /cerrada-la-marquesa/, /la-marquesa-proxy/, /cordoba-proxy/];
 const recorre = (d, out = []) => { for (const n of readdirSync(d)) { if (['.git', 'node_modules', 'vendor', '.wrangler'].includes(n)) continue; const p = join(d, n); statSync(p).isDirectory() ? recorre(p, out) : out.push(p); } return out; };
 await t('ningún archivo del repo (código, config, tests, docs) contiene las marcas prohibidas', async () => {
   const raiz = join(import.meta.dirname, '..'); const malos = [];

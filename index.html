@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <!-- Fondo (entrada del residencial): precarga solo la variante del viewport para no retrasar el render -->
-<link rel="preload" as="image" href="assets/fondo-mojave-mobile.jpg" media="(max-width:699px)">
-<link rel="preload" as="image" href="assets/fondo-mojave-desktop.jpg" media="(min-width:700px)">
+<link rel="preload" as="image" href="assets/fondo-mojave-mobile.webp" media="(max-width:699px)">
+<link rel="preload" as="image" href="assets/fondo-mojave-desktop.webp" media="(min-width:700px)">
 <style>
   :root{
     --bg:#0D0D1A; --surface:#14142A; --surface-2:#1A1A2E; --line:#2B2B45;
@@ -36,20 +36,20 @@
   /* ---------- FONDO GLOBAL (entrada del residencial) ---------- */
   #bgLayer{
     position:fixed;inset:0;z-index:-2;
-    background-image:url('assets/fondo-mojave-mobile.jpg');
+    background-image:url('assets/fondo-mojave-mobile.webp');
     background-size:cover;background-position:center;background-repeat:no-repeat;
     background-color:var(--bg);   /* fallback mientras carga / si falla */
   }
-  @media (min-width:700px){ #bgLayer{ background-image:url('assets/fondo-mojave-desktop.jpg'); } }
+  @media (min-width:700px){ #bgLayer{ background-image:url('assets/fondo-mojave-desktop.webp'); } }
   /* Capa oscura sobre el fondo. LOGIN: suave (degradado, más oscuro abajo para el card).
      INTERNAS (body.in-app): ~85% para que el fondo no compita con el contenido. */
   #bgOverlay{
     position:fixed;inset:0;z-index:-1;
     /* LOGIN: capa más clara para lucir el letrero; se oscurece hacia abajo bajo el card */
-    background:linear-gradient(180deg, rgba(13,13,15,.16) 0%, rgba(13,13,15,.28) 46%, rgba(13,13,15,.70) 100%);
+    background:linear-gradient(180deg, rgba(13,13,26,.16) 0%, rgba(13,13,26,.28) 46%, rgba(13,13,26,.70) 100%);
     transition:background .35s ease;
   }
-  body.in-app #bgOverlay{ background:rgba(13,13,15,.70); }
+  body.in-app #bgOverlay{ background:rgba(13,13,26,.70); }
 
   /* ---------- LOGIN ---------- */
   .login-wrap{

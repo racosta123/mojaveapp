@@ -635,7 +635,7 @@ function fmtInviteVigencia(expira, dur){
 /* Texto que acompaña al QR en Web Share / WhatsApp. `pin` es opcional (compatibilidad si
    alguna vez falta en la respuesta) — código de respaldo por si el QR no se puede escanear. */
 /* Link de ruta al portón de visitas (Google Maps). Vacío = no se incluye la línea "Cómo llegar" en el mensaje. */
-const LINK_COMO_LLEGAR = '';   // PENDIENTE_MOJAVE_RUTA: pegar aquí el link de Google Maps al portón de visitas
+const LINK_COMO_LLEGAR = 'https://www.google.com/maps?q=29.047751241293177,-111.00625485272762';
 function buildInviteText(name, dur, uses, expira, pin){
   return `¡Hola, ${name}! 👋\n`
     + `Tienes acceso a *Cerrada Mojave*.\n`
@@ -683,7 +683,7 @@ async function buildInviteCard({ payload, name, dur, uses, expira, pin }){
 
   // Fondo: foto existente escalada "cover". Si falla, color sólido.
   try {
-    const bg = await loadImage('assets/fondo-mojave-mobile.jpg');
+    const bg = await loadImage('assets/fondo-mojave-mobile.webp');
     const s = Math.max(W / bg.width, H / bg.height);
     const bw = bg.width * s, bh = bg.height * s;
     ctx.drawImage(bg, (W - bw) / 2, (H - bh) / 2, bw, bh);
@@ -3578,7 +3578,7 @@ $('#votCerrarOverlay')?.addEventListener('click', e => { if (e.target.id==='votC
    — carrera que se pierde casi siempre, dejando el campo vacío. Este literal nunca fallará.
    Si el service worker activo responde con una versión DISTINTA (ver mostrarVersionSW más
    abajo), la reemplaza — eso solo pasa si ESTE dispositivo aún no terminó de actualizar. */
-const APP_VERSION = 'v1';
+const APP_VERSION = 'v2';
 /* Se pinta en todos los .app-version: al final de Puertas (todos) y en Gestión (staff). */
 function pintarVersion(v){
   document.querySelectorAll('.app-version').forEach(el => el.textContent = 'Versión ' + v);
