@@ -39,11 +39,16 @@ service cloud.firestore {
     match /aperturas/{id} {
       // staff ve todo; residente/esclavo su hogar; y TODA la casa (jefe y familiares) ve las
       // visitas de su casa (el Worker guarda casaId en cada visita). Una casa nunca ve otra.
+      // Cada comparación exige que el dato exista y NO esté vacío (en el documento y en el perfil):
+      // un registro con hogar/casaId ausente o '' nunca coincide con "quien no tiene residenteUid"
+      // — solo el staff lo lee.
       allow read: if signedIn() && (
         staff() ||
-        resource.data.hogar == request.auth.uid ||
-        resource.data.hogar == get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('residenteUid','') ||
-        (miCasaId() != '' && resource.data.casaId == miCasaId())
+        (resource.data.get('hogar', '') != '' && (
+          resource.data.hogar == request.auth.uid ||
+          (perfil().get('residenteUid', '') != '' && resource.data.hogar == perfil().get('residenteUid', ''))
+        )) ||
+        (miCasaId() != '' && resource.data.get('casaId', '') != '' && resource.data.casaId == miCasaId())
       );
       // los registros SOLO los escribe el Worker (service account, ignora estas reglas)
       allow write: if false;
@@ -70,10 +75,14 @@ service cloud.firestore {
 
     // ---- invitaciones ----
     match /invitaciones/{jti} {
+      // Igual que aperturas: hogar del documento y residenteUid del perfil deben existir y no
+      // estar vacíos; una invitación con hogar vacío/ausente solo la lee el staff.
       allow read: if signedIn() && (
         staff() ||
-        resource.data.hogar == request.auth.uid ||
-        resource.data.hogar == get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get('residenteUid','')
+        (resource.data.get('hogar', '') != '' && (
+          resource.data.hogar == request.auth.uid ||
+          (perfil().get('residenteUid', '') != '' && resource.data.hogar == perfil().get('residenteUid', ''))
+        ))
       );
       // creación/consumo de usos: SOLO el Worker
       allow write: if false;
