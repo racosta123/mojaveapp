@@ -894,15 +894,17 @@ function renderPendientes(){
   lista.innerHTML = pendientesCache.map(p => {
     const esAdm = p.rol === 'admin';
     const titulo = esAdm ? p.nombre : (p.domicilio || p.nombre);
-    const liga = p.liga.estado === 'viva' ? `liga viva hasta ${fmtPend(p.liga.expiraEn)}`
+    const liga = p.liga.estado === 'viva' ? `liga vigente hasta ${fmtPend(p.liga.expiraEn)}`
       : p.liga.estado === 'vencida' ? `liga vencida (${fmtPend(p.liga.expiraEn)})` : 'sin liga';
-    const sub = (esAdm ? 'Administrador' : p.nombre) + ` · alta por ${p.creadoPorNombre || '—'} · ${fmtPend(p.creadoEn)} · ${liga}`;
+    // Estado de cada invitación enviada: vigente / usada / vencida / reemplazada (la más reciente primero).
+    const hist = (p.historial || []).map(i => i.estado).join(', ');
+    const sub = (esAdm ? 'Administrador' : p.nombre) + ` · alta por ${p.creadoPorNombre || '—'} · ${fmtPend(p.creadoEn)} · ${liga}` + (hist ? ` · invitaciones: ${hist}` : '');
     let acts = '';
-    if (p.estado !== 'suspendido') acts += `<button class="row-act" data-act="reenviar" data-id="${p.id}">📲 Reenviar liga</button>`;
+    if (p.estado !== 'suspendido') acts += `<button class="row-act" data-act="reenviar" data-id="${p.id}" title="Genera una liga nueva; la anterior deja de funcionar">📲 Reenviar liga</button>`;
     if (!esAdm || ME.rol === 'master') acts += `<button class="row-act danger" data-act="cancelar-alta" data-id="${p.id}">Cancelar alta</button>`;
     return `<div class="row${p.duplicadoEstado==='activa'?' alerta':''}"><div class="ri">${esc(((p.nombre||'?').trim()[0]||'?').toUpperCase())}</div>`
       + `<div class="rt"><div class="a">${esc(titulo)}</div><div class="b">${esc(sub)}</div></div>`
-      + `<div class="tags"><span class="tag${p.liga.estado==='viva'?' in':''}">${p.liga.estado==='viva'?'Liga viva':p.liga.estado==='vencida'?'Vencida':'Sin liga'}</span></div></div>`
+      + `<div class="tags"><span class="tag${p.liga.estado==='viva'?' in':''}">${p.liga.estado==='viva'?'Liga vigente':p.liga.estado==='vencida'?'Vencida':'Sin liga'}</span></div></div>`
       + (acts ? `<div class="persona-acts">${acts}</div>` : '');
   }).join('');
 }
@@ -1656,6 +1658,7 @@ async function invitarPersona(p, btn){
   const orig = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   try {
     const r = await authedFetch('/invitaciones/crear', { personaId: p.id });
+    toast('Liga nueva generada. Si ya habías enviado otra, esa deja de funcionar.', 'ok');
     const url = new URL('registro.html', location.href).href + '#' + r.token;
     const destino = esJefeP(p) ? `el domicilio ${p.domicilio}` : 'la administración';
     const texto = `Hola, te invito a registrarte en la app de Cerrada Mojave para ${destino}. Abre este enlace (vence en 72 h):`;

@@ -19,6 +19,10 @@
     --r:22px; --r-sm:14px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* Los textos informativos no se seleccionan al tocar ni arrastrar (regla GLOBAL: lo heredan todas las pantallas,
+     hojas y avisos). Excepción: lo que se escribe (input, textarea, select, editables) y lo que se copia (.copiable). */
+  body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  input,textarea,select,[contenteditable],[contenteditable] *,.copiable,.mov-folio{-webkit-user-select:text;user-select:text}
   html,body{margin:0;height:100%}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -535,6 +539,7 @@
   <div id="tab-admin" class="tabpane hidden">
     <div id="pendSection" class="hidden">
       <div class="section-title">Pendientes de activar <span class="tag" id="pendCount">0</span></div>
+      <p class="vnote" style="margin:0 2px 8px">Al reenviar una liga se genera una nueva y la anterior deja de funcionar.</p>
       <div class="list" id="pendList"></div>
     </div>
     <div class="section-title">Personas</div>

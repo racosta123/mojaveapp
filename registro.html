@@ -14,7 +14,11 @@
     --gold:#F5A623; --gold-soft:#FFC15A; --text:#f5f5f4; --muted:#a1a1aa; --muted-2:#71717a;
     --bad:#f87171; --ok:#4ade80; --r:18px; --r-sm:13px;
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* Los textos informativos no se seleccionan al tocar ni arrastrar (regla GLOBAL: lo heredan todas las pantallas,
+     hojas y avisos). Excepción: lo que se escribe (input, textarea, select, editables) y lo que se copia (.copiable). */
+  body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  input,textarea,select,[contenteditable],[contenteditable] *,.copiable,.mov-folio{-webkit-user-select:text;user-select:text}
   html{background:#0D0D1A; color-scheme:dark}
   body{
     margin:0; min-height:100vh; background:radial-gradient(120% 90% at 50% 0%, #16130a 0%, var(--bg) 55%);
@@ -138,7 +142,8 @@
   <!-- Estado: invitación inválida -->
   <div id="invalidState" class="hidden center">
     <h2>Invitación no válida</h2>
-    <p class="lead" id="invalidMsg">Este enlace no es válido, ya se usó o venció. Pídele a la administración una invitación nueva.</p>
+    <p class="lead" id="invalidMsg">Este enlace no es válido. Pide una invitación nueva a la administración.</p>
+    <button class="btn btn-ghost hidden" id="retryBtn" type="button">Reintentar</button>
   </div>
 
   <!-- Estado: formulario -->
@@ -173,15 +178,34 @@
   const show = id => { ['loadingState','invalidState','formState','doneState'].forEach(s => $('#'+s).classList.toggle('hidden', s!==id)); };
   // config.js declara `const CONFIG` (ámbito léxico global, no window) — se referencia directo.
   const WORKER = (typeof CONFIG !== 'undefined' && CONFIG.workerUrl) ? CONFIG.workerUrl : '';
-  let token = '';
-  try { token = decodeURIComponent((location.hash || '').slice(1)); } catch (e) { token = (location.hash || '').slice(1); }
+  // El token es base64url: se descarta todo lo demás (espacios, saltos de línea, puntuación que
+  // añade un chat al pegar). Mayúsculas/minúsculas se respetan.
+  function leerToken(){
+    let t = '';
+    try { t = decodeURIComponent((location.hash || '').slice(1)); } catch (e) { t = (location.hash || '').slice(1); }
+    return t.replace(/[^A-Za-z0-9_-]/g, '');
+  }
+  let token = leerToken();
+
+  // Mensajes por motivo (el Worker manda el código en data.motivo y también el texto).
+  const MENSAJES = {
+    usada: 'Esta invitación ya se usó. Si no fuiste tú, pide una nueva a la administración.',
+    vencida: 'Esta invitación venció. Pide una nueva a la administración.',
+    reemplazada: 'Esta invitación fue reemplazada por una más nueva. Usa el último enlace que recibiste.',
+    invalida: 'Este enlace no es válido. Revisa que lo copiaste completo o pide uno nuevo a la administración.',
+    sin_codigo: 'Abre el enlace completo que te mandó la administración, no el ícono de la app.',
+    red: 'Sin conexión o el servicio no responde. Intenta de nuevo.',
+  };
 
   async function api(path, body){
-    const r = await fetch(WORKER + path, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
-    });
+    let r;
+    try {
+      r = await fetch(WORKER + path, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
+      });
+    } catch (e) { throw Object.assign(new Error(MENSAJES.red), { motivo:'red' }); }
     const data = await r.json().catch(()=>({}));
-    if (!r.ok) throw new Error(data.error || 'Error');
+    if (!r.ok) throw Object.assign(new Error(data.error || 'Error'), { motivo: r.status >= 500 ? 'red' : data.motivo, status: r.status });
     return data;
   }
 
@@ -190,10 +214,18 @@
   let deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; });
 
-  if (!token){ show('invalidState'); return; }
+  function invalida(motivo){
+    $('#invalidMsg').textContent = MENSAJES[motivo] || MENSAJES.invalida;
+    $('#retryBtn').classList.toggle('hidden', motivo !== 'red');
+    show('invalidState');
+  }
 
   // 1) Validar el token contra el Worker (nombre + domicilio precargados, no editables).
-  (async () => {
+  //    Se repite si el enlace cambia en la misma pestaña (pegar el enlace completo con la página ya abierta).
+  async function validar(){
+    token = leerToken();
+    if (!token){ invalida('sin_codigo'); return; }
+    show('loadingState');
     try {
       const v = await api('/invitaciones/validar', { token });
       // Un admin PURO no tiene domicilio en el padrón, así que el texto de residente no le
@@ -208,10 +240,12 @@
         : 'Tu domicilio quedó vinculado. Instala la app y entra con tu correo y contraseña.';
       show('formState');
     } catch(e){
-      $('#invalidMsg').textContent = 'Este enlace no es válido, ya se usó o venció. Pídele a la administración una invitación nueva.';
-      show('invalidState');
+      invalida(e.motivo);
     }
-  })();
+  }
+  window.addEventListener('hashchange', validar);
+  $('#retryBtn').addEventListener('click', validar);
+  validar();
 
   // 2) Completar el registro.
   $('#submitBtn').addEventListener('click', async () => {

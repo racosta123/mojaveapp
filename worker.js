@@ -1285,15 +1285,67 @@ function timingSafeEqual(a, b) {
 /* Lee y valida una invitación por su token. Devuelve { x, updateTime, hash } o null.
    Validación POR HASH y en tiempo constante — nunca por igualdad del token en claro. */
 async function leerInvitacionValida(env, at, token) {
-  const hash = await sha256b64url(String(token || ''));
+  const hash = await sha256b64url(limpiarToken(token));
   const r = await fetch(`${fsBase(env)}/registro_invitaciones/${hash}`, { headers:{ Authorization:'Bearer '+at } });
   if (!r.ok) return null;
   const doc = await r.json();
   const x = readDoc(doc.fields);
   if (!x || !timingSafeEqual(x.hashToken || '', hash)) return null;
-  if (x.usado) return null;
+  if (x.usado || x.reemplazada) return null;
   if (!x.expiraEn || new Date(x.expiraEn) < new Date()) return null;
   return { x, updateTime: doc.updateTime, hash };
+}
+
+/* El token es base64url: cualquier otro carácter (espacios, saltos de línea, puntuación que añade
+   un chat al pegar el enlace) se descarta. Mayúsculas/minúsculas NO se tocan (cuentan). */
+function limpiarToken(token) { return String(token || '').replace(/[^A-Za-z0-9_-]/g, ''); }
+
+/* Motivo por el que una invitación NO sirve (solo se llama cuando leerInvitacionValida dio null).
+   Devuelve un código, nunca datos de la persona: 'usada' | 'reemplazada' | 'vencida' | 'invalida'. */
+async function motivoInvitacionFallida(env, at, token) {
+  const limpio = limpiarToken(token);
+  if (!limpio) return 'sin_codigo';
+  const hash = await sha256b64url(limpio);
+  const r = await fetch(`${fsBase(env)}/registro_invitaciones/${hash}`, { headers:{ Authorization:'Bearer '+at } });
+  if (!r.ok) return 'invalida';
+  const x = readDoc((await r.json()).fields);
+  if (!x) return 'invalida';
+  if (x.usado) return 'usada';
+  if (x.reemplazada) return 'reemplazada';
+  if (!x.expiraEn || new Date(x.expiraEn) < new Date()) return 'vencida';
+  return 'invalida';
+}
+const MENSAJE_INVITACION = {
+  usada: 'Esta invitación ya se usó. Si no fuiste tú, pide una nueva a la administración.',
+  vencida: 'Esta invitación venció. Pide una nueva a la administración.',
+  reemplazada: 'Esta invitación fue reemplazada por una más nueva. Usa el último enlace que recibiste.',
+  invalida: 'Este enlace no es válido. Revisa que lo copiaste completo o pide uno nuevo a la administración.',
+  sin_codigo: 'Abre el enlace completo que te mandó la administración, no el ícono de la app.',
+};
+
+/* IP truncada (privacidad): IPv4 → a.b.c.0 · IPv6 → primeros 3 grupos. */
+function ipTruncada(req) {
+  const ip = req.headers.get('CF-Connecting-IP') || '';
+  if (ip.includes(':')) return ip.split(':').slice(0, 3).join(':') + '::';
+  const p = ip.split('.');
+  return p.length === 4 ? p.slice(0, 3).join('.') + '.0' : 'desconocida';
+}
+/* Registro de intentos fallidos de /invitaciones/validar: un doc por día + IP truncada + motivo
+   con contador. NUNCA se guarda el token (ni su hash). Best-effort: jamás afecta la respuesta. */
+async function registrarIntentoFallido(env, at, req, motivo) {
+  try {
+    const ahora = new Date(), dia = ahora.toISOString().slice(0, 10), ip = ipTruncada(req);
+    const id = `${dia}_${ip.replace(/[^0-9a-fA-F.:]/g, '').replace(/:/g, '-')}_${motivo}`;
+    const previo = await getDoc(env, at, `registro_intentos/${id}`);
+    const p = previo ? readDoc(previo.fields) : null;
+    await firestoreSet(env, `registro_intentos/${id}`, {
+      dia:{stringValue:dia}, motivo:{stringValue:motivo}, ip:{stringValue:ip},
+      intentos:{integerValue:String((p?.intentos || 0) + 1)},
+      primero:{timestampValue: p?.primero || ahora.toISOString()}, ultimo:{timestampValue: ahora.toISOString()},
+    }, at);
+  } catch (e) {
+    console.error('[registro_intentos] no se pudo registrar:', e && e.name);
+  }
 }
 
 /* /invitaciones/crear — SOLO staff. Token de un uso para que un vecino ACTIVO y SIN
@@ -1560,9 +1612,14 @@ async function reenviarInvitacionFamiliar(req, env) {
    resuelto para mostrar). Devuelve el token en claro UNA sola vez. */
 async function emitirInvitacion(env, at, { persona, byId, creadoPor }) {
   const previas = (await firestoreList(env, 'registro_invitaciones'))
-    .filter(d => { const x = readDoc(d.fields); return x.personaId === persona.id && !x.usado; });
+    .filter(d => { const x = readDoc(d.fields); return x.personaId === persona.id && !x.usado && !x.reemplazada; });
+  // Las anteriores NO se borran: se marcan "reemplazada" para poder decirle al vecino el motivo real.
   for (const d of previas) {
-    await fetch(`${fsBase(env)}/registro_invitaciones/${d.name.split('/').pop()}`, { method:'DELETE', headers:{ Authorization:'Bearer '+at } });
+    const r = await fetch(`${fsBase(env)}/registro_invitaciones/${d.name.split('/').pop()}?updateMask.fieldPaths=reemplazada&updateMask.fieldPaths=reemplazadaEn`, {
+      method:'PATCH', headers:{ Authorization:'Bearer '+at, 'Content-Type':'application/json' },
+      body: JSON.stringify({ fields:{ reemplazada:{booleanValue:true}, reemplazadaEn:{timestampValue:new Date().toISOString()} } }),
+    });
+    if (!r.ok) throw httpErr(500, 'No se pudo invalidar la invitación anterior');
   }
   const token = bytesToB64url(crypto.getRandomValues(new Uint8Array(32)));
   const hash = await sha256b64url(token);
@@ -1609,7 +1666,11 @@ async function validarInvitacionRegistro(req, env) {
   const { token } = await req.json();
   const at = await saToken(env, 'https://www.googleapis.com/auth/datastore');
   const inv = await leerInvitacionValida(env, at, token);
-  if (!inv) throw httpErr(400, 'Invitación inválida o expirada');
+  if (!inv) {
+    const motivo = await motivoInvitacionFallida(env, at, token);
+    await registrarIntentoFallido(env, at, req, motivo);
+    return json({ error: MENSAJE_INVITACION[motivo], motivo }, 400);   // código de motivo, sin datos de la persona
+  }
   return json({ ok:true, nombre: inv.x.nombre || '', domicilio: inv.x.domicilio || '' });
 }
 
@@ -2067,7 +2128,11 @@ async function pendientesPersonas(req, env) {
   const ahora = Date.now();
 
   const pendientes = all.filter(p => !p.uid && !p.jefeId && p.rol !== 'master' && !esBaja(p)).map(p => {
-    const mias = invs.filter(i => i.personaId === p.id && !i.usado);
+    const todas = invs.filter(i => i.personaId === p.id);
+    const estadoInv = i => i.usado ? 'usada' : i.reemplazada ? 'reemplazada' : (i.expiraEn && new Date(i.expiraEn).getTime() > ahora) ? 'vigente' : 'vencida';
+    const historial = todas.map(i => ({ estado: estadoInv(i), creadoEn: i.creadoEn || null, expiraEn: i.expiraEn || null }))
+      .sort((a, b) => String(b.creadoEn || '').localeCompare(String(a.creadoEn || ''))).slice(0, 5);
+    const mias = todas.filter(i => !i.usado && !i.reemplazada);
     const viva = mias.filter(i => i.expiraEn && new Date(i.expiraEn).getTime() > ahora)
       .sort((a, b) => String(b.expiraEn).localeCompare(String(a.expiraEn)))[0];
     const liga = viva ? { estado: 'viva', expiraEn: viva.expiraEn }
@@ -2078,7 +2143,7 @@ async function pendientesPersonas(req, env) {
       domicilio: domicilioDe(p, byId),
       creadoPorNombre: p.dadoDeAltaNombre || nombrePorUid[p.creadoPor] || '',
       creadoEn: p.creadoEn || null,
-      liga,
+      liga, historial,
       duplicadoEstado: p.duplicadoEstado ?? null,
     };
   }).sort((a, b) => String(b.creadoEn || '').localeCompare(String(a.creadoEn || '')));
