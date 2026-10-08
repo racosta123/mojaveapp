@@ -54,6 +54,8 @@ function toast(msg, kind){
 }
 
 async function authedFetch(path, body){
+  // Sin conexión NO se manda nada (ni se deja en cola): la acción simplemente no ocurre.
+  if (sinConexion || !navigator.onLine) throw errorSinConexion();
   const token = await auth.currentUser.getIdToken();
   const headers = { 'Content-Type':'application/json', 'Authorization':'Bearer '+token };
   // App Check token (si está activo) para el Worker
@@ -63,7 +65,14 @@ async function authedFetch(path, body){
       if (ac?.token) headers['X-Firebase-AppCheck'] = ac.token;
     }
   } catch(e){}
-  const res = await fetch(WORKER + path, { method:'POST', headers, body: JSON.stringify(body||{}) });
+  let res;
+  try {
+    res = await fetch(WORKER + path, { method:'POST', headers, body: JSON.stringify(body||{}) });
+  } catch(e){
+    // fetch() solo falla así cuando no llegó al Worker (sin red): no es un error de cuenta.
+    if (auth.currentUser) ponerSinConexion(true);
+    throw errorSinConexion();
+  }
   if (!res.ok){
     let m = 'Error '+res.status, data = null;
     try { data = await res.json(); m = data.error || m; } catch(e){}
@@ -142,24 +151,141 @@ $('#forgotSend').addEventListener('click', async () => {
   }, 1000);
 });
 
-/* ====================== SESIÓN ====================== */
-auth.onAuthStateChanged(async user => {
-  if (!user){ showLogin(); return; }
+/* ====================== ARRANQUE ======================
+   Login y panel arrancan ocultos y se ve #bootView hasta que onAuthStateChanged (y la lectura del
+   perfil) decide. NO se guarda nada en localStorage para adelantar esa decisión: la única fuente
+   de verdad es Firebase Auth + el perfil. El límite de 8 s está en index.html (script en línea,
+   funciona aunque este archivo falle); si salta y luego llega un usuario válido, enterApp() cambia
+   al panel. Aquí solo se cancela ese límite al decidir. */
+function cancelarLimiteArranque(){
+  if (window.__arranqueTimer){ clearTimeout(window.__arranqueTimer); window.__arranqueTimer = null; }
+}
+function terminarArranque(){
+  cancelarLimiteArranque();
+  $('#bootView').classList.add('hidden');
+}
+
+/* ====================== CONEXIÓN ======================
+   Dos tipos de error, dos respuestas:
+   - De RED (sin internet, Firestore 'unavailable', tiempo agotado, no se llegó al Worker): la
+     sesión se CONSERVA. Aviso "Sin conexión", acciones bloqueadas (nunca en cola) y reintento
+     automático; al validar de nuevo con el servidor se quita el aviso.
+   - De CUENTA (perfil inexistente confirmado por el servidor, permiso denegado, usuario
+     deshabilitado/borrado, token revocado): se cierra la sesión, igual que antes.
+   El estado vive SOLO en memoria: nada de rol, perfil ni banderas en localStorage. */
+const CODIGOS_RED = ['unavailable', 'deadline-exceeded', 'auth/network-request-failed', 'auth/timeout'];
+const VALIDAR_LIMITE_MS = 6000;
+const REINTENTO_MS = 15000;
+let sinConexion = false;
+let perfilPendiente = false;   // abrió sin internet: panel sin perfil hasta que el servidor lo confirme
+let enPanel = false;           // el panel completo ya está armado con un perfil validado (en memoria)
+let reintentoTimer = null;
+let reintentando = false;
+
+function errorSinConexion(){
+  return Object.assign(new Error('Sin conexión: esta acción necesita internet'), { sinConexion: true });
+}
+function esErrorDeRed(e){
+  if (!navigator.onLine) return true;
+  return !!e && (e.sinConexion === true || CODIGOS_RED.includes(e.code));
+}
+// Si la red cuelga la promesa, a los VALIDAR_LIMITE_MS cuenta como error de red (no de cuenta).
+function conLimite(promesa){
+  return Promise.race([promesa, new Promise((_, rechazar) =>
+    setTimeout(() => rechazar(errorSinConexion()), VALIDAR_LIMITE_MS))]);
+}
+
+function ponerSinConexion(si){
+  sinConexion = si;
+  document.documentElement.classList.toggle('sin-conexion', si);
+  $('#sinConexionBanner').classList.toggle('hidden', !si);
+  if (si && !reintentoTimer) reintentoTimer = setInterval(reintentarConexion, REINTENTO_MS);
+  if (!si && reintentoTimer){ clearInterval(reintentoTimer); reintentoTimer = null; }
+}
+
+async function reintentarConexion(){
+  const user = auth.currentUser;
+  if (!user || !navigator.onLine || reintentando) return;
+  reintentando = true;
+  try { await validarYEntrar(user, true); } finally { reintentando = false; }
+}
+window.addEventListener('online', reintentarConexion);
+window.addEventListener('offline', () => { if (auth.currentUser && (enPanel || perfilPendiente)) ponerSinConexion(true); });
+
+/* Valida la sesión contra el SERVIDOR y entra (o sigue) en el panel.
+   forzarToken: al reconectar se renueva el token para que un usuario deshabilitado o borrado
+   quede fuera en cuanto vuelva el internet (Auth responde auth/user-disabled, etc.). */
+async function validarYEntrar(user, forzarToken){
   try {
-    const snap = await db.collection('usuarios').doc(user.uid).get();
+    if (forzarToken) await conLimite(user.getIdToken(true));
+    const snap = await conLimite(db.collection('usuarios').doc(user.uid).get());
+    if (auth.currentUser !== user) return;             // cerró sesión mientras tanto
     if (!snap.exists){
       toast('Tu cuenta no tiene perfil asignado', 'bad');
       await auth.signOut(); return;
     }
+    const yaEnPanel = enPanel && !!ME && ME.uid === user.uid;
     ME = { uid:user.uid, ...snap.data() };
-    enterApp();
+    ponerSinConexion(false);
+    if (!yaEnPanel) enterApp();
   } catch(e){
+    if (auth.currentUser !== user) return;
+    if (esErrorDeRed(e)){ entrarSinConexion(user); return; }
     toast('Error cargando perfil', 'bad');
     await auth.signOut();
   }
+}
+
+/* Panel en modo "Sin conexión". Si ya estaba adentro (perfil validado), solo aparece el aviso.
+   Si abrió sin internet, se muestra el panel SIN perfil (no hay copia guardada a propósito):
+   ni pestañas ni acciones hasta que el servidor lo confirme. */
+function entrarSinConexion(user){
+  ponerSinConexion(true);
+  if (enPanel && ME && ME.uid === user.uid) return;
+  terminarArranque();
+  perfilPendiente = true;
+  ME = null;
+  document.body.classList.add('in-app');
+  $('#loginView').classList.add('hidden');
+  $('#appView').classList.remove('hidden');
+  $('#avatar').textContent = (user.email || '?').trim()[0].toUpperCase();
+  $('#userName').textContent = user.email || '—';
+  $('#userRole').textContent = 'Sin conexión';
+  $('#modoBtn').classList.add('hidden');
+  $$('.tabpane').forEach(p => p.classList.add('hidden'));
+  $('#tabbar').classList.add('hidden');
+  $('#sinPerfilAun').classList.remove('hidden');
+}
+
+/* Sin conexión ninguna acción se ejecuta: se frena el toque antes de que llegue a su manejador
+   (puertas, invitaciones, pagos, votos, formularios…). Solo se permite cambiar de pestaña y Salir. */
+function bloquearSinConexion(e){
+  if (!sinConexion) return;
+  const t = e.target.closest && e.target.closest('button, a, input, select, textarea, label, .door, [role="button"], [onclick]');
+  if (!t || t.closest('#loginView, #bootView, #tabbar') || t.id === 'logoutBtn') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (e.type === 'click') toast('Sin conexión: esta acción necesita internet', 'bad');
+}
+document.addEventListener('click', bloquearSinConexion, true);
+document.addEventListener('change', bloquearSinConexion, true);
+document.addEventListener('submit', bloquearSinConexion, true);
+
+/* ====================== SESIÓN ====================== */
+auth.onAuthStateChanged(async user => {
+  if (!user){ showLogin(); return; }
+  cancelarLimiteArranque();   // ya hay sesión: el límite de 8 s ya no debe mandar al login
+  if (!navigator.onLine){ entrarSinConexion(user); return; }
+  await validarYEntrar(user, false);
 });
 
 function showLogin(){
+  terminarArranque();
+  ponerSinConexion(false);
+  perfilPendiente = false;
+  enPanel = false;
+  $('#sinPerfilAun').classList.add('hidden');
+  $('#tabbar').classList.remove('hidden');
   avisoPago = null; pintarAvisoPago();
   document.body.classList.remove('in-app');   // fondo con capa suave en el login
   $('#appView').classList.add('hidden');
@@ -175,6 +301,11 @@ function showLogin(){
 }
 
 function enterApp(){
+  terminarArranque();
+  perfilPendiente = false;
+  enPanel = true;
+  $('#sinPerfilAun').classList.add('hidden');
+  $('#tabbar').classList.remove('hidden');
   document.body.classList.add('in-app');   // fondo con capa ~85% en pantallas internas
   $('#loginView').classList.add('hidden');
   $('#appView').classList.remove('hidden');
@@ -378,6 +509,7 @@ window.addEventListener('focus', () => refrescarAvisoPago(false));
 let opening = false;
 async function openDoor(door, el){
   if (opening) return;
+  if (sinConexion || !navigator.onLine){ toast('Sin conexión: no se puede abrir la puerta', 'bad'); return; }
   opening = true; el.classList.add('opening');
   try {
     await authedFetch('/abrir', { puerta: door.id });
@@ -3581,7 +3713,7 @@ $('#votCerrarOverlay')?.addEventListener('click', e => { if (e.target.id==='votC
    — carrera que se pierde casi siempre, dejando el campo vacío. Este literal nunca fallará.
    Si el service worker activo responde con una versión DISTINTA (ver mostrarVersionSW más
    abajo), la reemplaza — eso solo pasa si ESTE dispositivo aún no terminó de actualizar. */
-const APP_VERSION = 'v2';
+const APP_VERSION = 'v4';
 /* Se pinta en todos los .app-version: al final de Puertas (todos) y en Gestión (staff). */
 function pintarVersion(v){
   document.querySelectorAll('.app-version').forEach(el => el.textContent = 'Versión ' + v);

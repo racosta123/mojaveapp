@@ -1,4 +1,4 @@
-const CACHE = 'mojave-v3';
+const CACHE = 'mojave-v4';
 const ASSETS = ['./','./index.html','./app.js','./config.js','./manifest.json',
   './vendor/qrcode.min.js','./vendor/jspdf.umd.min.js','./vendor/jspdf.plugin.autotable.min.js','./vendor/chart.umd.min.js',
   './assets/fondo-mojave-mobile.webp','./assets/fondo-mojave-desktop.webp','./assets/logo-mojave.jpg',
